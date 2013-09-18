@@ -1,0 +1,100 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": ""
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "access_key": "{{user `aws_access_key`}}",
+      "secret_key": "{{user `aws_secret_key` }}",
+      "region": "us-east-1",
+      "source_ami": "ami-53b1ff3a",
+      "instance_type": "m1.small",
+      "ssh_username": "ubuntu",
+      "ami_name": "packer-docker {{timestamp}}"
+    },
+    {
+      "type": "vmware",
+      "iso_url": "http://ubuntu.osuosl.org/releases/12.04.3/ubuntu-12.04.3-server-amd64.iso",
+      "iso_checksum": "61d5e67c70d97b33c13537461a0b153b41304ef412bb0e9d813bb157068c3c65",
+      "iso_checksum_type": "sha256",
+      "boot_wait": "5s",
+      "boot_command": [
+        "<esc><esc><enter><wait>",
+        "/install/vmlinuz noapic preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
+        "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
+        "hostname={{ .Name }} ",
+        "fb=false debconf/frontend=noninteractive ",
+        "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA keyboard-configuration/variant=USA console-setup/ask_detect=false ",
+        "initrd=/install/initrd.gz -- <enter>"
+      ],
+      "http_directory": "http",
+      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
+      "ssh_wait_timeout": "20m",
+      "ssh_username": "vagrant",
+      "ssh_password": "vagrant"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "script": "scripts/vagrant.sh",
+      "override": {
+        "amazon-ebs": {
+          "execute_command": "/bin/true"
+        },
+        "vmware": {
+          "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
+        }
+      }
+    },
+    {
+      "type": "chef-solo",
+      "cookbook_paths": [
+        "cookbooks"
+      ],
+      "run_list": [
+        "java::oracle",
+        "rvm::system"
+      ],
+      "json": {
+        "java": {
+          "oracle": {
+            "accept_oracle_download_terms": true
+          },
+          "jdk_version": "7"
+        },
+        "rvm": {
+          "rubies": [
+            "jruby-1.7.4",
+            "ruby-1.9.3-p429",
+            "ruby-1.9.3-p392",
+            "ruby-2.0.0-p195"
+          ],
+          "rvm_gem_options": "--rdoc --ri"
+        }
+      }
+    },
+    {
+      "type": "shell",
+      "scripts": [
+        "scripts/vm_cleanup.sh"
+      ],
+      "override": {
+        "amazon-ebs": {
+          "execute_command": "/bin/true"
+        },
+        "vmware": {
+          "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
+        }
+      }
+    }
+  ],
+  "post-processors": [
+    {
+      "type": "vagrant",
+      "keep_input_artifact": true
+    }
+  ]
+}
